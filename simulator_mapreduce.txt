@@ -1,0 +1,30 @@
+cat text1.txt | Rscript mapper_word_count.R > mapper1.txt
+cat text2.txt | Rscript mapper_word_count.R > mapper2.txt
+
+cat mapper1.txt mapper2.txt | sort -k1,1 | Rscript reducer_word_count.R 
+
+hadoop fs -mkdir /user/hive/warehouse/text_example/
+hadoop fs -put text.txt /user/hive/warehouse/text_example/
+
+create external table text_example (
+words string
+) row format delimited fields terminated by "|||" lines terminated by "\n"
+stored as textfile location "/user/hive/warehouse/text_example/";
+
+
+set mapred.reduce.tasks = 2;
+set mapred.map.tasks = 2;
+
+add file /home/cloudera/Desktop/mapper_word_count.R;
+add file /home/cloudera/Desktop/reducer_word_count.R;
+
+drop table text_example_word_count;
+create table text_example_word_count as select transform(x.*)
+using 'Rscript reducer_word_count.R'
+as (word string, number int)
+from (
+select transform (*)
+using 'Rscript mapper_word_count.R'
+as (word string, number int)
+from text_example distribute by word
+) x;
